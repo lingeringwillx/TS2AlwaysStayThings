@@ -9,12 +9,6 @@ typedef struct {
     vector<BYTE> bytes;
 } patch_t;
 
-bool IsLargeAddressAware(DWORD modBase)
-{
-    PIMAGE_NT_HEADERS ntHeader = (PIMAGE_NT_HEADERS)((DWORD_PTR)modBase + ((PIMAGE_DOS_HEADER)modBase)->e_lfanew);
-    return (ntHeader->FileHeader.Characteristics & IMAGE_FILE_LARGE_ADDRESS_AWARE) != 0;
-}
-
 void WriteToMemory(DWORD modBase, const patch_t &patch)
 {
     DWORD oldProtection;
@@ -28,25 +22,22 @@ void WriteToMemory(DWORD modBase, const patch_t &patch)
 
 DWORD WINAPI MainThread(LPVOID param)
 {
-    const DWORD modBase = reinterpret_cast<DWORD>(GetModuleHandleA(NULL));
+    DWORD modBase = reinterpret_cast<DWORD>(GetModuleHandleA(NULL));
 
-    if (IsLargeAddressAware(modBase))
+    const vector<patch_t> patches =
     {
-        const vector<patch_t> patches =
-        {
-            //inside CleanupThingsRelatedToEvictedFamily()
-            //replace IsDeletedByEvict() with false
-            {0x00AFBE56, {0x31, 0xC0, 0x90, 0x90, 0x90, 0x90}},
+        //inside cTSLoadLotController::CleanupThingsRelatedToEvictedFamily
+        //replace cTSObject::IsDeletedByEvict() with false
+        {0x00AFBE56, {0x31, 0xC0, 0x90, 0x90, 0x90, 0x90}},
 
-            //inside GetLotFileInfo()
-            //remove the evicted flag check, always add the lot objects value to the total
-            {0x0044844A, {0x90, 0x90}}
-        };
+        //inside cTSNeighborhood::GetLotFileInfo
+        //remove the evicted flag check, always add the lot objects value to the total
+        {0x0044844A, {0x90, 0x90}}
+    };
 
-        for (auto &patch: patches)
-        {
-            WriteToMemory(modBase, patch);
-        }
+    for (auto &patch: patches)
+    {
+        WriteToMemory(modBase, patch);
     }
 
     FreeLibraryAndExitThread((HMODULE)param, 0);
